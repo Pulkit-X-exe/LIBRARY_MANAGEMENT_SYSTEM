@@ -1,0 +1,16 @@
+{
+  "name": "library-management-system-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "School Library Management System - Root Runner",
+  "scripts": {
+    "dev:backend": "npm --prefix backend start",
+    "dev:frontend": "npm --prefix frontend dev",
+    "start:backend": "npm --prefix backend start",
+    "start:frontend": "npm --prefix frontend dev",
+    "seed": "npm --prefix backend run seed"
+  },
+  "dependencies": {
+    "ngrok": "^5.0.0-beta.2"
+  }
+}
