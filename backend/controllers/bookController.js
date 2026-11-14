@@ -5,8 +5,8 @@ const { logActivity } = require('../middleware/logger');
 exports.getAllBooks = async (req, res) => {
   try {
     const { 
-      search, category, subject, author, language, condition,
-      available, sort = 'newest', page = 1, limit = 16 
+      search, category, subject, author, publisher, language, condition,
+      publication_year, available, sort = 'newest', page = 1, limit = 16 
     } = req.query;
 
     const where = {};
@@ -18,14 +18,20 @@ exports.getAllBooks = async (req, res) => {
       where.available_copies = 1;
     } else if (available === 'unavailable') {
       where.available_copies = 0;
+    } else if (available === 'issued') {
+      where.issued_copies = { [Op.gt]: 0 };
     }
 
-    if (language && language !== 'All') {
+    if (language && language !== 'All' && language !== 'all') {
       where.language = language;
     }
 
-    if (condition && condition !== 'All') {
+    if (condition && condition !== 'All' && condition !== 'all') {
       where.condition = condition;
+    }
+
+    if (publication_year && publication_year !== 'All' && publication_year !== 'all') {
+      where.publication_year = parseInt(publication_year);
     }
 
     const include = [
@@ -123,7 +129,7 @@ exports.getAllBooks = async (req, res) => {
     });
 
     // Compute average ratings
-    const booksWithRating = books.map(b => {
+    let booksWithRating = books.map(b => {
       const bObj = b.toJSON();
       const ratings = bObj.reviews || [];
       const avgRating = ratings.length > 0
@@ -135,6 +141,10 @@ exports.getAllBooks = async (req, res) => {
         reviews_count: ratings.length
       };
     });
+
+    if (sort === 'rating' || sort === 'highest_rated') {
+      booksWithRating.sort((a, b) => b.avg_rating - a.avg_rating);
+    }
 
     return res.json({
       success: true,

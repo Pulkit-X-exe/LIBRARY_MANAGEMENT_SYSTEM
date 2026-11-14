@@ -290,6 +290,44 @@ const ActivityLog = sequelize.define('ActivityLog', {
   ip_address: { type: DataTypes.STRING }
 }, { timestamps: true });
 
+// --- 10.1 Reading Goals & Gamification ---
+const ReadingGoal = sequelize.define('ReadingGoal', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  user_id: { type: DataTypes.INTEGER, allowNull: false },
+  year_month: { type: DataTypes.STRING, allowNull: false }, // Format: 'YYYY-MM'
+  target_books: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 5 },
+  status: { 
+    type: DataTypes.ENUM('in_progress', 'achieved'), 
+    defaultValue: 'in_progress' 
+  }
+}, { timestamps: true });
+
+// --- 10.2 Custom Reading Lists ---
+const ReadingList = sequelize.define('ReadingList', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  user_id: { type: DataTypes.INTEGER, allowNull: false },
+  name: { type: DataTypes.STRING, allowNull: false },
+  description: { type: DataTypes.STRING, defaultValue: '' }
+}, { timestamps: true });
+
+const ReadingListItem = sequelize.define('ReadingListItem', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  reading_list_id: { type: DataTypes.INTEGER, allowNull: false },
+  book_id: { type: DataTypes.INTEGER, allowNull: false },
+  notes: { type: DataTypes.TEXT, allowNull: true }
+}, { timestamps: true });
+
+// --- 10.3 Curated School / Teacher Recommendations ---
+const CuratedRecommendation = sequelize.define('CuratedRecommendation', {
+  id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+  class_name: { type: DataTypes.STRING, allowNull: false }, // e.g. 'Class 10', 'All'
+  subject: { type: DataTypes.STRING, allowNull: true },
+  topic: { type: DataTypes.STRING, allowNull: true },
+  book_id: { type: DataTypes.INTEGER, allowNull: false },
+  notes: { type: DataTypes.TEXT, allowNull: true },
+  recommended_by_id: { type: DataTypes.INTEGER, allowNull: true }
+}, { timestamps: true });
+
 // --- 11. Password Reset Tokens (Email OTP & Authorization) ---
 const PasswordResetToken = sequelize.define('PasswordResetToken', {
   id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
@@ -428,6 +466,27 @@ BookIssueReminder.belongsTo(User, { foreignKey: 'student_id', as: 'student' });
 User.hasMany(PasswordResetToken, { foreignKey: 'user_id', as: 'password_reset_tokens', onDelete: 'CASCADE' });
 PasswordResetToken.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+// Reading Goals
+User.hasMany(ReadingGoal, { foreignKey: 'user_id', as: 'reading_goals', onDelete: 'CASCADE' });
+ReadingGoal.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// Reading Lists
+User.hasMany(ReadingList, { foreignKey: 'user_id', as: 'reading_lists', onDelete: 'CASCADE' });
+ReadingList.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+ReadingList.hasMany(ReadingListItem, { foreignKey: 'reading_list_id', as: 'items', onDelete: 'CASCADE' });
+ReadingListItem.belongsTo(ReadingList, { foreignKey: 'reading_list_id', as: 'list' });
+
+ReadingListItem.belongsTo(Book, { foreignKey: 'book_id', as: 'book' });
+Book.hasMany(ReadingListItem, { foreignKey: 'book_id', as: 'reading_list_items', onDelete: 'CASCADE' });
+
+// Curated Recommendations
+CuratedRecommendation.belongsTo(Book, { foreignKey: 'book_id', as: 'book' });
+Book.hasMany(CuratedRecommendation, { foreignKey: 'book_id', as: 'curated_recommendations', onDelete: 'CASCADE' });
+
+CuratedRecommendation.belongsTo(User, { foreignKey: 'recommended_by_id', as: 'curator' });
+User.hasMany(CuratedRecommendation, { foreignKey: 'recommended_by_id', as: 'curated_recommendations' });
+
 module.exports = {
   sequelize,
   Op,
@@ -456,5 +515,9 @@ module.exports = {
   LibrarySetting,
   ActivityLog,
   PasswordResetToken,
-  EmailVerificationToken
+  EmailVerificationToken,
+  ReadingGoal,
+  ReadingList,
+  ReadingListItem,
+  CuratedRecommendation
 };

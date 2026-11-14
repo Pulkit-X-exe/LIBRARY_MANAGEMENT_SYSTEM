@@ -28,7 +28,7 @@ const fileFilter = (req, file, cb) => {
   if (allowedExtensions.includes(ext) && allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    const error = new Error('Invalid image format. Only JPG, JPEG, PNG, and WEBP files are allowed.');
+    const error = new Error('Please select a valid image. Only JPG, JPEG, PNG, and WEBP files are allowed.');
     error.code = 'INVALID_FILE_TYPE';
     cb(error, false);
   }
@@ -52,7 +52,7 @@ const handleProfileUpload = (req, res, next) => {
       if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({
           success: false,
-          message: 'Profile picture must be smaller than 5MB.'
+          message: 'Image size is too large. Profile picture must be smaller than 5MB.'
         });
       }
       return res.status(400).json({
@@ -69,8 +69,23 @@ const handleProfileUpload = (req, res, next) => {
   });
 };
 
+const handleBulkImportUpload = (req, res, next) => {
+  const memoryUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024 }
+  }).single('file');
+
+  memoryUpload(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: 'Upload error: ' + err.message });
+    }
+    next();
+  });
+};
+
 module.exports = {
   upload,
   handleProfileUpload,
+  handleBulkImportUpload,
   uploadDir
 };

@@ -1,7 +1,8 @@
 const { Op } = require('sequelize');
 const { 
   Book, BookCopy, BookIssue, BookReturn, User, StudentProfile, 
-  TeacherProfile, Fine, Reservation, Notification, ActivityLog 
+  TeacherProfile, Fine, Reservation, Notification, ActivityLog,
+  Category, Author
 } = require('../models');
 const { getRules, calculateOverdueFine } = require('../services/ruleEngine');
 const { logActivity } = require('../middleware/logger');
@@ -387,11 +388,21 @@ exports.renewBook = async (req, res) => {
       return res.status(400).json({ success: false, message: `Cannot renew book in "${issue.status}" status.` });
     }
 
-    // Check renewal limits
-    if (issue.renewal_count >= rules.max_renewals) {
+    // Phase 7: Block renewal if the book is already overdue
+    const now = new Date();
+    if (new Date(issue.due_date) < now || issue.status === 'overdue') {
       return res.status(400).json({
         success: false,
-        message: `Maximum renewal limit (${rules.max_renewals}) reached for this book loan.`
+        message: 'Cannot renew book: This loan is already overdue. Please return the book at the circulation desk and clear any applicable late fees.'
+      });
+    }
+
+    // Check renewal limits: Maximum 2 renewals per issue
+    const maxRenewals = Math.min(2, rules.max_renewals || 2);
+    if (issue.renewal_count >= maxRenewals) {
+      return res.status(400).json({
+        success: false,
+        message: `Maximum renewal limit (${maxRenewals}) reached for this book loan.`
       });
     }
 
@@ -410,14 +421,14 @@ exports.renewBook = async (req, res) => {
       });
     }
 
-    // Calculate new due date
-    const extensionDays = issue.user.role === 'teacher' ? Math.max(28, rules.borrow_duration_days) : rules.borrow_duration_days;
+    // Phase 7: Renewal extends due date by 7 days
     const currentDue = new Date(issue.due_date);
-    const newDueDate = new Date(Math.max(Date.now(), currentDue.getTime()) + extensionDays * 24 * 60 * 60 * 1000);
+    const newDueDate = new Date(Math.max(Date.now(), currentDue.getTime()) + 7 * 24 * 60 * 60 * 1000);
 
+    const newRenewalCount = (issue.renewal_count || 0) + 1;
     await issue.update({
       due_date: newDueDate,
-      renewal_count: issue.renewal_count + 1
+      renewal_count: newRenewalCount
     });
 
     await Notification.create({
@@ -511,5 +522,228 @@ exports.getLoanHistory = async (req, res) => {
   } catch (error) {
     console.error('getLoanHistory error:', error);
     return res.status(500).json({ success: false, message: 'Failed to retrieve loan history.' });
+  }
+};
+
+// Phase 2: Rapid Scanner Resolution for Patrons (QR Code / Barcode)
+exports.scanPatron = async (req, res) => {
+  try {
+    let { identifier } = req.params;
+    if (!identifier) {
+      return res.status(400).json({ success: false, message: 'Identifier is required.' });
+    }
+
+    identifier = decodeURIComponent(identifier).trim();
+
+    // Check if identifier is stringified JSON from student QR card
+    if (identifier.startsWith('{') && identifier.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(identifier);
+        identifier = parsed.barcode || parsed.roll || parsed.id || identifier;
+      } catch (e) {
+        // Not valid JSON, keep as raw identifier
+      }
+    }
+
+    let user = null;
+
+    // Search by student profile: barcode_id, roll_number, admission_number, student_id
+    const profile = await StudentProfile.findOne({
+      where: {
+        [Op.or]: [
+          { barcode_id: identifier },
+          { roll_number: identifier },
+          { admission_number: identifier },
+          { student_id: identifier }
+        ]
+      },
+      include: [{ model: User, as: 'user' }]
+    });
+
+    if (profile && profile.user) {
+      user = profile.user;
+    } else {
+      // Fallback search by ID or Email
+      if (/^\d+$/.test(identifier)) {
+        user = await User.findByPk(parseInt(identifier), {
+          include: [{ model: StudentProfile, as: 'student_profile' }]
+        });
+      }
+      if (!user) {
+        user = await User.findOne({
+          where: { email: identifier },
+          include: [{ model: StudentProfile, as: 'student_profile' }]
+        });
+      }
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: `No patron found matching QR / Barcode "${identifier}".`
+      });
+    }
+
+    // Get active loans
+    const activeLoans = await BookIssue.findAll({
+      where: { user_id: user.id, status: ['issued', 'overdue'] },
+      include: [
+        { model: Book, as: 'book' },
+        { model: BookCopy, as: 'copy' }
+      ],
+      order: [['due_date', 'ASC']]
+    });
+
+    const now = new Date();
+    const overdueCount = activeLoans.filter(l => new Date(l.due_date) < now).length;
+
+    // Sum pending fines
+    const pendingFines = (await Fine.sum('amount', {
+      where: { user_id: user.id, status: 'pending' }
+    })) || 0;
+
+    const rules = await getRules();
+    const maxLimit = user.role === 'teacher' ? rules.teacher_max_books : rules.student_max_books;
+    const canBorrow = user.status === 'active' && activeLoans.length < maxLimit && pendingFines <= 100;
+
+    return res.json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        avatar: user.avatar,
+        profile_picture: user.profile_picture,
+        student_profile: user.student_profile || profile
+      },
+      activeLoans,
+      activeLoansCount: activeLoans.length,
+      overdueCount,
+      pendingFines,
+      maxLimit,
+      canBorrow,
+      borrowLimitRemaining: Math.max(0, maxLimit - activeLoans.length)
+    });
+  } catch (error) {
+    console.error('scanPatron error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to scan patron: ' + error.message });
+  }
+};
+
+// Phase 2: Rapid Scanner Resolution for Books (QR Code / Copy Barcode / ISBN)
+exports.scanBook = async (req, res) => {
+  try {
+    let { identifier } = req.params;
+    if (!identifier) {
+      return res.status(400).json({ success: false, message: 'Identifier is required.' });
+    }
+
+    identifier = decodeURIComponent(identifier).trim();
+
+    // Check if identifier is stringified JSON
+    if (identifier.startsWith('{') && identifier.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(identifier);
+        identifier = parsed.barcode || parsed.isbn || parsed.id || identifier;
+      } catch (e) {
+        // Keep as raw identifier
+      }
+    }
+
+    // Try finding by physical copy barcode first
+    let copy = await BookCopy.findOne({
+      where: { barcode: identifier },
+      include: [
+        {
+          model: Book,
+          as: 'book',
+          include: [
+            { model: Category, as: 'category' },
+            { model: Author, as: 'author' }
+          ]
+        }
+      ]
+    });
+
+    let book = null;
+    if (copy) {
+      book = copy.book;
+    } else {
+      // Try finding book by ISBN or ID
+      if (/^\d+$/.test(identifier)) {
+        book = await Book.findByPk(parseInt(identifier), {
+          include: [
+            { model: Category, as: 'category' },
+            { model: Author, as: 'author' },
+            { model: BookCopy, as: 'copies' }
+          ]
+        });
+      }
+      if (!book) {
+        book = await Book.findOne({
+          where: { isbn: identifier },
+          include: [
+            { model: Category, as: 'category' },
+            { model: Author, as: 'author' },
+            { model: BookCopy, as: 'copies' }
+          ]
+        });
+      }
+      if (book && book.copies && book.copies.length > 0) {
+        // Pick first available copy or first copy
+        copy = book.copies.find(c => c.status === 'available') || book.copies[0];
+      }
+    }
+
+    if (!book) {
+      return res.status(404).json({
+        success: false,
+        message: `No book copy or title found matching barcode/ISBN "${identifier}".`
+      });
+    }
+
+    // Check if there is an active loan on this copy
+    let activeIssue = null;
+    let overdueDays = 0;
+    let fineEstimate = 0;
+    if (copy) {
+      activeIssue = await BookIssue.findOne({
+        where: { copy_id: copy.id, status: ['issued', 'overdue'] },
+        include: [{ model: User, as: 'user', attributes: ['id', 'name', 'email', 'role'] }]
+      });
+
+      if (activeIssue) {
+        const now = new Date();
+        const due = new Date(activeIssue.due_date);
+        if (now > due) {
+          const diffTime = Math.abs(now - due);
+          overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          const rules = await getRules();
+          fineEstimate = overdueDays * (rules.fine_per_day || 5);
+        }
+      }
+    }
+
+    // Check reservation queue count
+    const reservationCount = await Reservation.count({
+      where: { book_id: book.id, status: ['Pending', 'Approved', 'waiting'] }
+    });
+
+    return res.json({
+      success: true,
+      book,
+      copy,
+      isIssued: !!activeIssue,
+      activeIssue,
+      overdueDays,
+      fineEstimate,
+      reservationCount,
+      canIssue: copy ? copy.status === 'available' : book.available_copies > 0
+    });
+  } catch (error) {
+    console.error('scanBook error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to scan book: ' + error.message });
   }
 };

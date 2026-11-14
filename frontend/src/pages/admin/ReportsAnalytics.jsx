@@ -51,6 +51,22 @@ export default function ReportsAnalytics() {
     window.URL.revokeObjectURL(url);
   };
 
+  const downloadPDF = async (type) => {
+    try {
+      const response = await api.get(`/reports/pdf/${type}`, { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Adarsh_School_${type}_report_${Date.now()}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate PDF report.');
+    }
+  };
+
   const circulationColumns = [
     { header: 'ID', accessor: 'id', cellClassName: 'font-mono text-indigo-600 font-bold' },
     { header: 'Book Title', render: (r) => <span className="font-bold text-slate-900 dark:text-white">{r.book?.title}</span> },
@@ -94,13 +110,21 @@ export default function ReportsAnalytics() {
           </p>
         </div>
 
-        <button
-          onClick={exportToCSV}
-          disabled={data.length === 0}
-          className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-40"
-        >
-          <FileSpreadsheet className="h-4 w-4" /> Export CSV / Excel
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => downloadPDF(reportType)}
+            className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition-colors"
+          >
+            <Download className="h-4 w-4" /> Download Official PDF
+          </button>
+          <button
+            onClick={exportToCSV}
+            disabled={data.length === 0}
+            className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-40"
+          >
+            <FileSpreadsheet className="h-4 w-4" /> Export CSV / Excel
+          </button>
+        </div>
       </div>
 
       {/* Report Selector Tabs */}

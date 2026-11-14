@@ -167,17 +167,18 @@ export default function MyLoans() {
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs">
-                      <span className="text-slate-400 text-[11px]">
-                        Renewals: <strong className="text-slate-700 dark:text-slate-300">{loan.renewal_count || 0} / 2</strong>
+                      <span className="text-slate-500 dark:text-slate-400 text-xs">
+                        Renewals used: <strong className="text-slate-800 dark:text-slate-200">{loan.renewal_count || 0} / 2</strong>
                       </span>
 
                       <button
                         type="button"
                         onClick={() => handleRenew(loan.id)}
-                        disabled={loan.renewal_count >= 2}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-40"
+                        disabled={loan.renewal_count >= 2 || isOverdue}
+                        title={isOverdue ? 'Overdue books cannot be renewed online' : loan.renewal_count >= 2 ? 'Maximum renewals used' : 'Renew for 7 additional days'}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-40 transition-colors"
                       >
-                        <RefreshCw className="h-3.5 w-3.5" /> Request Renewal (+14 Days)
+                        <RefreshCw className="h-3.5 w-3.5" /> Renew Book (+7 Days)
                       </button>
                     </div>
                   </div>

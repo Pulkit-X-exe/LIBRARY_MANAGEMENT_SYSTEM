@@ -137,7 +137,12 @@ export default function Navbar({ onToggleSidebar }) {
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <p className="font-bold text-slate-900 dark:text-white leading-tight">{n.title}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="rounded-md bg-indigo-100 dark:bg-indigo-950 px-1.5 py-0.5 text-[9px] font-bold uppercase text-indigo-700 dark:text-indigo-300">
+                            {n.type?.replace('_', ' ') || 'Notice'}
+                          </span>
+                          <p className="font-bold text-slate-900 dark:text-white leading-tight">{n.title}</p>
+                        </div>
                         {!n.is_read && <span className="h-2 w-2 rounded-full bg-blue-600 shrink-0"></span>}
                       </div>
                       <p className="mt-1 text-slate-600 dark:text-slate-300 text-[11px] leading-relaxed">{n.message}</p>

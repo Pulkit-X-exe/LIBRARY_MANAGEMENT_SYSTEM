@@ -2,8 +2,10 @@ import React, { useState, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { 
   User, Mail, Phone, GraduationCap, Briefcase, 
-  Camera, Check, X, Edit3, Shield, AlertCircle
+  Camera, Check, X, Edit3, Shield, AlertCircle, CheckCircle2
 } from 'lucide-react';
+import ImageCropModal from '../../components/ImageCropModal';
+import { validateImageFile } from '../../utils/cropImage';
 
 export default function Profile() {
   const { user, updateProfile, updateProfilePicture } = useAuth();
@@ -21,12 +23,10 @@ export default function Profile() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
 
-  // Change Picture State
-  const [pictureModalOpen, setPictureModalOpen] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [uploadError, setUploadError] = useState('');
-  const [uploadLoading, setUploadLoading] = useState(false);
+  // Change Picture & Crop State
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState('');
+  const [toastMessage, setToastMessage] = useState('');
   const fileInputRef = useRef(null);
 
   const studentProfile = user?.student_profile;
@@ -54,50 +54,52 @@ export default function Profile() {
     }
   };
 
-  // Select File for Profile Picture
-  const handleFileSelect = (e) => {
+  // Select File for Profile Picture and Open Crop Modal
+  const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
-    setUploadError('');
     if (!file) return;
+    // Clear the input value so selecting the same file again triggers onChange
+    e.target.value = '';
 
-    // Validate type
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setUploadError('Please select a valid image file (JPG, PNG, or WEBP).');
+    setProfileMessage({ type: '', text: '' });
+
+    // Validate file type, size, and integrity
+    const validation = await validateImageFile(file);
+    if (!validation.valid) {
+      setProfileMessage({ type: 'error', text: validation.error });
       return;
     }
 
-    // Validate size (5MB max)
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError('Image size exceeds 5MB limit. Please choose a smaller photo.');
-      return;
-    }
-
-    setSelectedFile(file);
+    // Open modern crop modal
     const objectUrl = URL.createObjectURL(file);
-    setPreviewUrl(objectUrl);
+    setCropImageSrc(objectUrl);
+    setCropModalOpen(true);
   };
 
-  // Upload New Profile Picture
-  const handleConfirmUpload = async () => {
-    if (!selectedFile) {
-      setUploadError('Please choose an image file first.');
-      return;
+  const handlePickNewFile = (newFile) => {
+    if (cropImageSrc) {
+      URL.revokeObjectURL(cropImageSrc);
     }
+    const objectUrl = URL.createObjectURL(newFile);
+    setCropImageSrc(objectUrl);
+  };
 
-    setUploadLoading(true);
-    setUploadError('');
-    try {
-      await updateProfilePicture(selectedFile);
-      setPictureModalOpen(false);
-      setSelectedFile(null);
-      setPreviewUrl('');
-      setProfileMessage({ type: 'success', text: 'Profile picture updated successfully.' });
-    } catch (err) {
-      setUploadError(err.response?.data?.message || err.message || 'Failed to upload image.');
-    } finally {
-      setUploadLoading(false);
+  const handleCropModalClose = () => {
+    if (cropImageSrc) {
+      URL.revokeObjectURL(cropImageSrc);
     }
+    setCropImageSrc('');
+    setCropModalOpen(false);
+  };
+
+  // Upload New Profile Picture (Called ONLY after user clicks "Save / Upload" in Crop Modal)
+  const handleUploadSuccess = async (croppedFile) => {
+    await updateProfilePicture(croppedFile);
+    setToastMessage('Profile picture updated successfully.');
+    setProfileMessage({ type: 'success', text: 'Profile picture updated successfully.' });
+    setTimeout(() => {
+      setToastMessage('');
+    }, 4500);
   };
 
   const currentAvatarUrl = user?.profile_picture || user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80';
@@ -115,12 +117,7 @@ export default function Profile() {
               className="h-28 w-28 rounded-2xl object-cover ring-4 ring-indigo-50 dark:ring-slate-800 shadow-md"
             />
             <button
-              onClick={() => {
-                setUploadError('');
-                setSelectedFile(null);
-                setPreviewUrl('');
-                setPictureModalOpen(true);
-              }}
+              onClick={() => fileInputRef.current?.click()}
               title="Change Profile Picture"
               className="absolute -bottom-2 -right-2 flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md hover:bg-indigo-700 transition-colors"
             >
@@ -169,12 +166,7 @@ export default function Profile() {
                 )}
 
                 <button
-                  onClick={() => {
-                    setUploadError('');
-                    setSelectedFile(null);
-                    setPreviewUrl('');
-                    setPictureModalOpen(true);
-                  }}
+                  onClick={() => fileInputRef.current?.click()}
                   className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 transition-colors"
                 >
                   <Camera className="h-3.5 w-3.5" /> Change Photo
@@ -458,90 +450,37 @@ export default function Profile() {
         )}
       </div>
 
-      {/* Change Picture Modal */}
-      {pictureModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-fade-in">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Camera className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Change Profile Picture
-              </h3>
-              <button
-                onClick={() => setPictureModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+      {/* Hidden File Input for Image Selection */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
 
-            <div className="mt-4 space-y-4">
-              {/* Preview Box */}
-              <div className="flex flex-col items-center justify-center p-4 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50/50 dark:bg-slate-800/40">
-                <img
-                  src={previewUrl || currentAvatarUrl}
-                  alt="Preview"
-                  className="h-28 w-28 rounded-2xl object-cover ring-2 ring-indigo-500/20 shadow-md"
-                />
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2">
-                  {selectedFile ? selectedFile.name : 'Current photo (select new below)'}
-                </p>
-              </div>
+      {/* Modern Profile Picture Crop & Preview Modal */}
+      <ImageCropModal
+        isOpen={cropModalOpen}
+        imageSrc={cropImageSrc}
+        onClose={handleCropModalClose}
+        onUploadSuccess={handleUploadSuccess}
+        onPickNewFile={handlePickNewFile}
+      />
 
-              {uploadError && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-400 flex items-center gap-1.5">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{uploadError}</span>
-                </div>
-              )}
-
-              {/* Hidden File Input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-
-              <div className="flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/60"
-                >
-                  Choose Image from Device
-                </button>
-                <span className="text-[11px] text-center text-slate-400">
-                  Supported formats: JPG, PNG, WEBP (Max 5MB)
-                </span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="mt-6 flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => setPictureModalOpen(false)}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!selectedFile || uploadLoading}
-                onClick={handleConfirmUpload}
-                className="rounded-xl bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-1.5"
-              >
-                {uploadLoading ? (
-                  'Uploading...'
-                ) : (
-                  <>
-                    <Check className="h-3.5 w-3.5" /> Confirm & Save
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+      {/* Floating Success Toast */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-600 px-5 py-3.5 text-xs font-bold text-white shadow-2xl animate-fade-in">
+          <CheckCircle2 className="h-5 w-5 text-white shrink-0" />
+          <span>{toastMessage}</span>
+          <button 
+            type="button" 
+            onClick={() => setToastMessage('')} 
+            className="ml-2 text-white/80 hover:text-white"
+            aria-label="Dismiss notification"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
     </div>

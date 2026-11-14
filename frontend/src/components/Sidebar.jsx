@@ -5,7 +5,7 @@ import {
   LayoutDashboard, BookOpen, Clock, Bookmark, Heart,
   Receipt, FileText, QrCode, ArrowLeftRight, Users,
   FolderTree, Sliders, BarChart3, History, Database,
-  Megaphone, AlertTriangle, GraduationCap, BookCheck, UserX, User as UserIcon
+  Megaphone, AlertTriangle, GraduationCap, BookCheck, UserX, User as UserIcon, BookMarked
 } from 'lucide-react';
 
 export default function Sidebar({ isOpen, onClose }) {
@@ -17,6 +17,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { name: 'Digital Library', path: '/student/books', icon: BookOpen },
     { name: 'My Loans & Due Dates', path: '/student/loans', icon: Clock },
     { name: 'My Book Requests', path: '/student/reservations', icon: Bookmark },
+    { name: 'Personal Reading Lists', path: '/student/reading-lists', icon: BookMarked },
     { name: 'My Wishlist', path: '/student/wishlist', icon: Heart },
     { name: 'Fines & Payments', path: '/student/fines', icon: Receipt },
     { name: 'E-Resources & Notes', path: '/student/digital', icon: FileText },

@@ -2,7 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { sequelize, BookIssue, Fine, BookIssueReminder, PasswordResetToken, EmailVerificationToken } = require('./models');
+const { 
+  sequelize, BookIssue, Fine, BookIssueReminder, PasswordResetToken, 
+  EmailVerificationToken, ReadingGoal, ReadingList, ReadingListItem, 
+  CuratedRecommendation, LibrarySetting 
+} = require('./models');
 const { getRules, calculateOverdueFine } = require('./services/ruleEngine');
 const { initScheduler, runDailyLibraryAudit } = require('./services/scheduler');
 const apiRoutes = require('./routes/api');
@@ -176,6 +180,19 @@ app.listen(PORT, async () => {
 
     await EmailVerificationToken.sync();
     console.log('✅ Synchronized database: email_verification_tokens table verified.');
+
+    // Ensure ReadingGoal, ReadingList, ReadingListItem, and CuratedRecommendation tables exist
+    await ReadingGoal.sync();
+    await ReadingList.sync();
+    await ReadingListItem.sync();
+    await CuratedRecommendation.sync();
+    console.log('✅ Synchronized database: Reading Goals, Lists, and Curated Recommendations verified.');
+
+    // Ensure default leaderboard setting exists
+    await LibrarySetting.findOrCreate({
+      where: { key: 'leaderboard_enabled' },
+      defaults: { value: 'true', group: 'gamification' }
+    });
   } catch (dbErr) {
     console.warn('Database column check notice:', dbErr.message);
   }

@@ -5,6 +5,8 @@ import {
   GraduationCap, Camera, X, AlertCircle, User, Mail, Lock, Phone,
   CheckCircle2, Clock, RefreshCw, ArrowLeft, ShieldCheck, KeyRound
 } from 'lucide-react';
+import ImageCropModal from '../../components/ImageCropModal';
+import { validateImageFile } from '../../utils/cropImage';
 
 export default function Register() {
   // Steps: 1: Details Form, 2: Verify Email OTP, 3: Account Created / Success
@@ -26,6 +28,8 @@ export default function Register() {
 
   const [profileImageFile, setProfileImageFile] = useState(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState('');
   const fileInputRef = useRef(null);
 
   // Step 2 OTP State
@@ -58,27 +62,51 @@ export default function Register() {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     setError('');
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
 
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      setError('Please select a valid image file (JPG, PNG, or WEBP).');
+    const validation = await validateImageFile(file);
+    if (!validation.valid) {
+      setError(validation.error);
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError('Profile picture must be under 5MB.');
-      return;
-    }
+    const objectUrl = URL.createObjectURL(file);
+    setCropImageSrc(objectUrl);
+    setCropModalOpen(true);
+  };
 
-    setProfileImageFile(file);
-    setImagePreviewUrl(URL.createObjectURL(file));
+  const handlePickNewFile = (newFile) => {
+    if (cropImageSrc) {
+      URL.revokeObjectURL(cropImageSrc);
+    }
+    const objectUrl = URL.createObjectURL(newFile);
+    setCropImageSrc(objectUrl);
+  };
+
+  const handleCropModalClose = () => {
+    if (cropImageSrc) {
+      URL.revokeObjectURL(cropImageSrc);
+    }
+    setCropImageSrc('');
+    setCropModalOpen(false);
+  };
+
+  const handleCropSuccess = async (croppedFile) => {
+    setProfileImageFile(croppedFile);
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
+    setImagePreviewUrl(URL.createObjectURL(croppedFile));
   };
 
   const handleClearImage = () => {
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
     setProfileImageFile(null);
     setImagePreviewUrl('');
     if (fileInputRef.current) {
@@ -696,6 +724,15 @@ export default function Register() {
             </button>
           </div>
         )}
+
+        {/* Profile Picture Crop Modal */}
+        <ImageCropModal
+          isOpen={cropModalOpen}
+          imageSrc={cropImageSrc}
+          onClose={handleCropModalClose}
+          onUploadSuccess={handleCropSuccess}
+          onPickNewFile={handlePickNewFile}
+        />
 
       </div>
     </div>

@@ -37,16 +37,20 @@ ChartJS.register(
 export default function AdminDashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
 
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
         const res = await api.get('/analytics/dashboard');
-        if (res.data.success) {
+        if (res.data && res.data.success) {
           setAnalytics(res.data);
+        } else {
+          setFetchError(res.data?.message || 'Failed to load analytics data.');
         }
       } catch (err) {
-        console.error(err);
+        console.error('Failed to load admin analytics:', err);
+        setFetchError(err.response?.data?.message || err.message || 'Error connecting to analytics service.');
       } finally {
         setLoading(false);
       }
@@ -55,15 +59,36 @@ export default function AdminDashboard() {
     fetchAnalytics();
   }, []);
 
-  if (loading || !analytics) {
+  if (loading) {
     return (
-      <div className="py-20 text-center text-xs font-semibold text-slate-400">
-        Aggregating system metrics from relational database...
+      <div className="py-24 text-center text-xs font-semibold text-slate-400">
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent inline-block mb-3"></span>
+        <p>Aggregating system metrics from relational database...</p>
       </div>
     );
   }
 
-  const { kpis, categoryData, monthlyTrend, classBorrowing, mostBorrowed } = analytics;
+  if (fetchError && !analytics) {
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-400 max-w-lg mx-auto mt-12 space-y-3">
+        <AlertTriangle className="h-8 w-8 text-rose-500 mx-auto" />
+        <p className="font-bold text-sm">Unable to Load Admin Dashboard</p>
+        <p>{fetchError}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition-colors"
+        >
+          Retry Loading
+        </button>
+      </div>
+    );
+  }
+
+  const kpis = analytics?.kpis || {};
+  const categoryData = Array.isArray(analytics?.categoryData) ? analytics.categoryData : [];
+  const monthlyTrend = Array.isArray(analytics?.monthlyTrend) ? analytics.monthlyTrend : [];
+  const classBorrowing = Array.isArray(analytics?.classBorrowing) ? analytics.classBorrowing : [];
+  const mostBorrowed = Array.isArray(analytics?.mostBorrowed) ? analytics.mostBorrowed : [];
 
   // 1. Monthly Trends Chart
   const lineChartData = {

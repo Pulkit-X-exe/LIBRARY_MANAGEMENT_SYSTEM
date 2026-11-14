@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { verifyToken, authorizeRoles } = require('../middleware/auth');
-const { handleProfileUpload } = require('../middleware/upload');
+const { handleProfileUpload, handleBulkImportUpload } = require('../middleware/upload');
 
 // Controllers
 const authCtrl = require('../controllers/authController');
@@ -23,6 +23,11 @@ const bkpCtrl = require('../controllers/backupController');
 const actCtrl = require('../controllers/activityController');
 const studentCtrl = require('../controllers/studentController');
 const libraryOpsCtrl = require('../controllers/libraryOperationsController');
+const gamifyCtrl = require('../controllers/gamificationController');
+const readingListCtrl = require('../controllers/readingListController');
+const recCtrl = require('../controllers/recommendationController');
+const curatedRecCtrl = require('../controllers/curatedRecommendationController');
+const bulkImportCtrl = require('../controllers/bulkImportController');
 
 // 1. Auth & Profile
 router.post('/auth/login', authCtrl.login);
@@ -44,6 +49,7 @@ router.post('/books', verifyToken, authorizeRoles('librarian', 'admin'), bookCtr
 router.put('/books/:id', verifyToken, authorizeRoles('librarian', 'admin'), bookCtrl.updateBook);
 router.delete('/books/:id', verifyToken, authorizeRoles('admin'), bookCtrl.deleteBook);
 router.put('/books/copies/:copyId', verifyToken, authorizeRoles('librarian', 'admin'), bookCtrl.updateCopyStatus);
+router.post('/books/bulk-import', verifyToken, authorizeRoles('librarian', 'admin'), handleBulkImportUpload, bulkImportCtrl.bulkImportBooks);
 
 // 3. Circulation (Issues, Returns, Renewals) - Physical issue by Librarian / Admin ONLY
 router.post('/circulation/issue', verifyToken, authorizeRoles('librarian', 'admin'), circCtrl.issueBook);
@@ -51,6 +57,8 @@ router.post('/circulation/return', verifyToken, authorizeRoles('librarian', 'adm
 router.post('/circulation/renew', verifyToken, circCtrl.renewBook);
 router.get('/circulation/loans/active', verifyToken, circCtrl.getActiveLoans);
 router.get('/circulation/loans/history', verifyToken, circCtrl.getLoanHistory);
+router.get('/circulation/scan-patron/:identifier', verifyToken, authorizeRoles('librarian', 'admin'), circCtrl.scanPatron);
+router.get('/circulation/scan-book/:identifier', verifyToken, authorizeRoles('librarian', 'admin'), circCtrl.scanBook);
 
 // 3.1 Library Operations: Issued Books, Defaulters, Reminders, Returns
 router.get('/library/issues/active', verifyToken, authorizeRoles('librarian', 'admin'), libraryOpsCtrl.getIssuedBooks);
@@ -120,8 +128,32 @@ router.get('/digital', verifyToken, digCtrl.getResources);
 router.get('/digital/:id/download', verifyToken, digCtrl.downloadResource);
 
 // 11. Reviews & Ratings
+router.get('/reviews/book/:bookId', revCtrl.getBookReviews);
 router.post('/reviews', verifyToken, revCtrl.addReview);
 router.delete('/reviews/:id', verifyToken, revCtrl.deleteReview);
+router.put('/reviews/:id/moderate', verifyToken, authorizeRoles('librarian', 'admin'), revCtrl.moderateReview);
+
+// 11.1 Personal Reading Lists
+router.get('/reading-lists', verifyToken, readingListCtrl.getReadingLists);
+router.post('/reading-lists', verifyToken, readingListCtrl.createReadingList);
+router.put('/reading-lists/:id', verifyToken, readingListCtrl.updateReadingList);
+router.delete('/reading-lists/:id', verifyToken, readingListCtrl.deleteReadingList);
+router.post('/reading-lists/:id/books', verifyToken, readingListCtrl.addBookToList);
+router.delete('/reading-lists/:id/books/:bookId', verifyToken, readingListCtrl.removeBookFromList);
+
+// 11.2 Recommendations (Local Algorithmic & School Curated)
+router.get('/recommendations/for-you', verifyToken, recCtrl.getRecommendationsForYou);
+router.get('/curated-recommendations', verifyToken, curatedRecCtrl.getCuratedRecommendations);
+router.post('/curated-recommendations', verifyToken, authorizeRoles('librarian', 'admin'), curatedRecCtrl.createCuratedRecommendation);
+router.delete('/curated-recommendations/:id', verifyToken, authorizeRoles('librarian', 'admin'), curatedRecCtrl.deleteCuratedRecommendation);
+
+// 11.3 Gamification, Goals & Leaderboard
+router.get('/analytics/student', verifyToken, gamifyCtrl.getStudentAnalytics);
+router.get('/gamification/goals', verifyToken, gamifyCtrl.getReadingGoal);
+router.post('/gamification/goals', verifyToken, gamifyCtrl.updateReadingGoal);
+router.get('/gamification/badges', verifyToken, gamifyCtrl.getBadges);
+router.get('/gamification/leaderboard', verifyToken, gamifyCtrl.getLeaderboard);
+router.put('/gamification/leaderboard/toggle', verifyToken, authorizeRoles('librarian', 'admin'), gamifyCtrl.toggleLeaderboard);
 
 // 12. Wishlist
 router.get('/wishlist', verifyToken, wishCtrl.getWishlist);
@@ -137,6 +169,8 @@ router.get('/reports/circulation', verifyToken, authorizeRoles('librarian', 'adm
 router.get('/reports/overdue', verifyToken, authorizeRoles('librarian', 'admin'), repCtrl.getOverdueReport);
 router.get('/reports/fines', verifyToken, authorizeRoles('librarian', 'admin'), repCtrl.getFineReport);
 router.get('/reports/inventory', verifyToken, authorizeRoles('librarian', 'admin'), repCtrl.getInventoryReport);
+router.get('/reports/inventory-intelligence', verifyToken, authorizeRoles('librarian', 'admin'), repCtrl.getInventoryIntelligence);
+router.get('/reports/pdf/:type', verifyToken, authorizeRoles('librarian', 'admin'), repCtrl.downloadPdfReport);
 router.get('/analytics/dashboard', verifyToken, authorizeRoles('librarian', 'admin'), anaCtrl.getDashboardAnalytics);
 
 // 15. Activity Logs & Backup (Admin)

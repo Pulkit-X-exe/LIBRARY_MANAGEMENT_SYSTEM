@@ -20,6 +20,7 @@ import FinesView from './pages/student/FinesView';
 import WishlistView from './pages/student/WishlistView';
 import DigitalLibraryView from './pages/student/DigitalLibraryView';
 import DigitalCardPage from './pages/student/DigitalCardPage';
+import ReadingListsView from './pages/student/ReadingListsView';
 
 // Teacher Pages
 import TeacherDashboard from './pages/teacher/TeacherDashboard';
@@ -119,6 +120,7 @@ export default function App() {
                 <Route path="/student/reservations" element={<ReservationsView />} />
                 <Route path="/student/wishlist" element={<WishlistView />} />
                 <Route path="/student/fines" element={<FinesView />} />
+                <Route path="/student/reading-lists" element={<ReadingListsView />} />
                 <Route path="/student/digital" element={<DigitalLibraryView />} />
                 <Route path="/student/card" element={<DigitalCardPage />} />
 

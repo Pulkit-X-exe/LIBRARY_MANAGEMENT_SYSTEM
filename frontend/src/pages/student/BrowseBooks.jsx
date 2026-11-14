@@ -2,12 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import api from '../../api/client';
 import Badge from '../../components/Badge';
 import BookCover from '../../components/BookCover';
+import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../../context/AuthContext';
 import {
   Search, Filter, Heart, BookOpen, Clock, CheckCircle2,
   AlertCircle, ChevronRight, X, Sparkles, TrendingUp,
   MapPin, Layers, Award, Calendar, BookMarked, Info,
-  ShieldCheck, RefreshCw, Bookmark
+  ShieldCheck, RefreshCw, Bookmark, Star, QrCode, Trash2, ListPlus
 } from 'lucide-react';
 
 const CATEGORY_LIST = [
@@ -42,6 +43,7 @@ export default function BrowseBooks() {
   const [availability, setAvailability] = useState('all');
   const [condition, setCondition] = useState('all');
   const [language, setLanguage] = useState('all');
+  const [publicationYear, setPublicationYear] = useState('all');
   const [sort, setSort] = useState('newest');
 
   // Modals
@@ -51,6 +53,19 @@ export default function BrowseBooks() {
   const [reservationNotes, setReservationNotes] = useState('');
   const [submittingReservation, setSubmittingReservation] = useState(false);
 
+  // Phase 9: Reading List Modal State
+  const [readingLists, setReadingLists] = useState([]);
+  const [readingListModalOpen, setReadingListModalOpen] = useState(false);
+  const [selectedListId, setSelectedListId] = useState('');
+  const [addingToList, setAddingToList] = useState(false);
+
+  // Phase 10: Reviews State
+  const [userRating, setUserRating] = useState(5);
+  const [userReviewText, setUserReviewText] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [borrowedBookIds, setBorrowedBookIds] = useState(new Set());
+  const [showQrInModal, setShowQrInModal] = useState(false);
+
   // Notifications / Toast
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
@@ -59,6 +74,31 @@ export default function BrowseBooks() {
     setTimeout(() => {
       setToast({ show: false, message: '', type: 'success' });
     }, 4500);
+  };
+
+  // Fetch Borrowing History to verify if student can review books
+  const fetchBorrowingHistory = async () => {
+    try {
+      const res = await api.get('/circulation/loans/history');
+      if (res.data.success && Array.isArray(res.data.history)) {
+        const ids = new Set(res.data.history.map(h => h.book_id));
+        setBorrowedBookIds(ids);
+      }
+    } catch (err) {
+      console.warn('Could not fetch loan history for reviews:', err);
+    }
+  };
+
+  // Fetch Reading Lists for adding books
+  const fetchReadingLists = async () => {
+    try {
+      const res = await api.get('/reading-lists');
+      if (res.data.success) {
+        setReadingLists(res.data.lists || []);
+      }
+    } catch (err) {
+      console.warn('Could not fetch reading lists:', err);
+    }
   };
 
   // Fetch Discovery Stats (Top statistics, popular, recently added)
@@ -99,6 +139,7 @@ export default function BrowseBooks() {
       if (availability && availability !== 'all') params.append('availability', availability);
       if (condition && condition !== 'all') params.append('condition', condition);
       if (language && language !== 'all') params.append('language', language);
+      if (publicationYear && publicationYear !== 'all') params.append('publication_year', publicationYear);
       if (sort) params.append('sort', sort);
       params.append('limit', '100');
 
@@ -116,6 +157,8 @@ export default function BrowseBooks() {
   useEffect(() => {
     fetchDiscoveryStats();
     fetchWishlist();
+    fetchBorrowingHistory();
+    fetchReadingLists();
   }, []);
 
   useEffect(() => {
@@ -123,7 +166,7 @@ export default function BrowseBooks() {
       fetchBooks();
     }, 250);
     return () => clearTimeout(timer);
-  }, [search, category, availability, condition, language, sort]);
+  }, [search, category, availability, condition, language, publicationYear, sort]);
 
   // Wishlist toggle
   const handleToggleWishlist = async (book, e) => {
@@ -153,6 +196,7 @@ export default function BrowseBooks() {
   const handleOpenDetails = async (book) => {
     setSelectedBook(book);
     setDetailLoading(true);
+    setShowQrInModal(false);
     try {
       const res = await api.get(`/books/${book.id}`);
       if (res.data.success && res.data.book) {
@@ -162,6 +206,73 @@ export default function BrowseBooks() {
       console.error('Error loading book details:', err);
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  // Phase 9: Open reading list picker
+  const handleOpenReadingList = (book) => {
+    setSelectedBook(book);
+    fetchReadingLists();
+    if (readingLists.length > 0) setSelectedListId(readingLists[0].id);
+    setReadingListModalOpen(true);
+  };
+
+  // Phase 9: Add book to reading list
+  const handleAddBookToSelectedList = async (e) => {
+    e.preventDefault();
+    if (!selectedListId || !selectedBook) return;
+    setAddingToList(true);
+    try {
+      const res = await api.post(`/reading-lists/${selectedListId}/books`, {
+        book_id: selectedBook.id
+      });
+      if (res.data.success) {
+        showToast(res.data.message, 'success');
+        setReadingListModalOpen(false);
+      }
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to add to reading list', 'error');
+    } finally {
+      setAddingToList(false);
+    }
+  };
+
+  // Phase 10: Submit Review & Rating
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!selectedBook) return;
+    setSubmittingReview(true);
+    try {
+      const res = await api.post('/reviews', {
+        book_id: selectedBook.id,
+        rating: userRating,
+        review_text: userReviewText
+      });
+      if (res.data.success) {
+        showToast(res.data.message, 'success');
+        setUserReviewText('');
+        handleOpenDetails(selectedBook);
+        fetchBooks();
+      }
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to post review.', 'error');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  // Phase 10: Delete Review
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm('Delete this review?')) return;
+    try {
+      const res = await api.delete(`/reviews/${reviewId}`);
+      if (res.data.success) {
+        showToast('Review deleted.', 'info');
+        handleOpenDetails(selectedBook);
+        fetchBooks();
+      }
+    } catch (err) {
+      showToast('Failed to delete review.', 'error');
     }
   };
 
@@ -432,7 +543,7 @@ export default function BrowseBooks() {
         </div>
 
         {/* Secondary Filters Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
           {/* Availability */}
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
@@ -445,8 +556,29 @@ export default function BrowseBooks() {
             >
               <option value="all">All Inventory</option>
               <option value="available_now">Available Now (1+ copies)</option>
+              <option value="issued">Currently Issued Books</option>
               <option value="limited">Limited (Only 1 copy)</option>
-              <option value="unavailable">Currently Unavailable (0 copies)</option>
+              <option value="unavailable">Unavailable (0 copies)</option>
+            </select>
+          </div>
+
+          {/* Publication Year */}
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+              Publication Year
+            </label>
+            <select
+              value={publicationYear}
+              onChange={(e) => setPublicationYear(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 focus:outline-hidden"
+            >
+              <option value="all">All Years</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
+              <option value="2022">2022</option>
+              <option value="2021">2021</option>
+              <option value="2020">2020</option>
+              <option value="2019">2019</option>
             </select>
           </div>
 
@@ -496,6 +628,7 @@ export default function BrowseBooks() {
               className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 focus:outline-hidden"
             >
               <option value="newest">Recently Added</option>
+              <option value="rating">Highest Rated ⭐</option>
               <option value="popular">Most Popular (Loans)</option>
               <option value="available">Most Available Stock</option>
               <option value="az">Title: A to Z</option>
@@ -760,9 +893,47 @@ export default function BrowseBooks() {
                         }`}
                       >
                         <Heart className="h-3.5 w-3.5 fill-current" />
-                        {wishlistBookIds.has(selectedBook.id) ? 'Wishlisted' : 'Add to Wishlist'}
+                        {wishlistBookIds.has(selectedBook.id) ? 'Wishlisted' : 'Wishlist'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenReadingList(selectedBook)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 transition-colors"
+                      >
+                        <ListPlus className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" /> Reading List
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowQrInModal(!showQrInModal)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/60 px-3.5 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300"
+                      >
+                        <QrCode className="h-3.5 w-3.5" /> {showQrInModal ? 'Hide QR' : 'Book QR'}
                       </button>
                     </div>
+
+                    {/* Book QR Code Section */}
+                    {showQrInModal && (
+                      <div className="mt-3 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4 dark:border-indigo-900/40 dark:bg-slate-800 flex flex-col items-center text-center">
+                        <div className="bg-white p-3 rounded-xl shadow-md">
+                          <QRCodeSVG
+                            value={JSON.stringify({
+                              type: 'LIBRARY_BOOK',
+                              id: selectedBook.id,
+                              isbn: selectedBook.isbn,
+                              barcode: selectedBook.copies?.[0]?.barcode || `LIB-${selectedBook.id}`,
+                              title: selectedBook.title
+                            })}
+                            size={120}
+                          />
+                        </div>
+                        <span className="mt-2 font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+                          {selectedBook.copies?.[0]?.barcode || selectedBook.isbn}
+                        </span>
+                        <span className="text-[10px] text-slate-400">Scan at circulation desk to check-out or check-in</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -853,6 +1024,124 @@ export default function BrowseBooks() {
                     </div>
                   </div>
                 </div>
+
+                {/* ====================================================
+                    PHASE 10: RATINGS & REVIEWS SECTION
+                   ==================================================== */}
+                <div className="space-y-4 border-t border-slate-100 dark:border-slate-800 pt-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        Ratings & Reader Reviews
+                      </h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center text-amber-400">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Star
+                              key={star}
+                              className={`h-4 w-4 ${star <= Math.round(selectedBook.avg_rating || 0) ? 'fill-current' : 'text-slate-300 dark:text-slate-600'}`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-sm font-extrabold text-slate-900 dark:text-white">
+                          {selectedBook.avg_rating ? `${selectedBook.avg_rating} / 5` : 'No reviews yet'}
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          ({(selectedBook.reviews || []).length} {(selectedBook.reviews || []).length === 1 ? 'review' : 'reviews'})
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Review Submission Form (Only if student has borrowed this book) */}
+                  {borrowedBookIds.has(selectedBook.id) || (user?.role !== 'student') ? (
+                    <form onSubmit={handleSubmitReview} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/40 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Rate this book:</span>
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              onClick={() => setUserRating(s)}
+                              className="p-1 hover:scale-110 transition-transform"
+                            >
+                              <Star className={`h-5 w-5 ${s <= userRating ? 'text-amber-400 fill-current' : 'text-slate-300 dark:text-slate-600'}`} />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <textarea
+                        rows={2}
+                        value={userReviewText}
+                        onChange={(e) => setUserReviewText(e.target.value)}
+                        placeholder="Write your review for fellow students (clarity, exam tips, key chapters)..."
+                        className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:outline-hidden"
+                      />
+
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={submittingReview}
+                          className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                          {submittingReview ? 'Posting...' : 'Submit Rating & Review'}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-800/40 flex items-center gap-2">
+                      <Info className="h-4 w-4 text-indigo-500 shrink-0" />
+                      <span>Only patrons who have actually borrowed this book from the library can submit ratings & reviews.</span>
+                    </div>
+                  )}
+
+                  {/* Reviews List */}
+                  <div className="space-y-3 pt-1">
+                    {(selectedBook.reviews || []).length === 0 ? (
+                      <p className="text-xs text-slate-400 italic">No student reviews posted yet.</p>
+                    ) : (
+                      (selectedBook.reviews || []).map((rev) => (
+                        <div key={rev.id} className="rounded-2xl border border-slate-100 p-3.5 bg-white dark:border-slate-800 dark:bg-slate-800/60">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center text-amber-400">
+                                {[1, 2, 3, 4, 5].map((st) => (
+                                  <Star key={st} className={`h-3 w-3 ${st <= rev.rating ? 'fill-current' : 'text-slate-200 dark:text-slate-700'}`} />
+                                ))}
+                              </div>
+                              <span className="font-bold text-xs text-slate-900 dark:text-white">
+                                {rev.user?.name || 'Academic Patron'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-slate-400">
+                                {new Date(rev.createdAt).toLocaleDateString()}
+                              </span>
+                              {(rev.user_id === user?.id || user?.role === 'admin' || user?.role === 'librarian') && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteReview(rev.id)}
+                                  className="text-slate-400 hover:text-rose-600 p-1"
+                                  title="Delete Review"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {rev.review_text && (
+                            <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                              {rev.review_text}
+                            </p>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -939,6 +1228,72 @@ export default function BrowseBooks() {
                 {submittingReservation ? 'Submitting...' : 'Submit Request'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ====================================================
+          7. READING LIST SELECTOR MODAL
+         ==================================================== */}
+      {readingListModalOpen && selectedBook && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <ListPlus className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">Add to Reading List</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReadingListModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              Select which bookshelf to add <strong className="text-slate-900 dark:text-white">"{selectedBook.title}"</strong> to:
+            </div>
+
+            <form onSubmit={handleAddBookToSelectedList} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                  Target Reading List:
+                </label>
+                {readingLists.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">
+                    You haven't created any custom reading lists yet. Go to your <span className="font-semibold text-indigo-600">Personal Reading Lists</span> to create one!
+                  </p>
+                ) : (
+                  <select
+                    value={selectedListId}
+                    onChange={(e) => setSelectedListId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                  >
+                    {readingLists.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name} ({(l.items || []).length} books)</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setReadingListModalOpen(false)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingToList || readingLists.length === 0}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {addingToList ? 'Saving...' : 'Add Book'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
