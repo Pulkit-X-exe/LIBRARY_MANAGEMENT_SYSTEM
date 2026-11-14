@@ -7,6 +7,7 @@ import {
   GraduationCap, CheckCheck, Menu, ChevronDown, LayoutDashboard
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
+import { getImageUrl } from '../utils/imageUrl';
 
 export default function Navbar({ onToggleSidebar }) {
   const { user, logout, role } = useAuth();
@@ -22,7 +23,7 @@ export default function Navbar({ onToggleSidebar }) {
     navigate('/login');
   };
 
-  const avatarUrl = user?.profile_picture || user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=128&q=80';
+  const avatarUrl = getImageUrl(user?.profile_picture || user?.avatar, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=128&q=80');
 
   return (
     <header className="sticky top-0 z-40 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/95 sm:px-6">

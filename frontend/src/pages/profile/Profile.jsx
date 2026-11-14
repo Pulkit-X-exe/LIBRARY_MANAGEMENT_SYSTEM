@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import ImageCropModal from '../../components/ImageCropModal';
 import { validateImageFile } from '../../utils/cropImage';
+import { getImageUrl } from '../../utils/imageUrl';
 
 export default function Profile() {
   const { user, updateProfile, updateProfilePicture } = useAuth();
@@ -102,7 +103,7 @@ export default function Profile() {
     }, 4500);
   };
 
-  const currentAvatarUrl = user?.profile_picture || user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80';
+  const currentAvatarUrl = getImageUrl(user?.profile_picture || user?.avatar, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80');
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 animate-fade-in pb-12">

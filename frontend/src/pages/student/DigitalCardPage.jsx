@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { Printer, BookOpen, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { getImageUrl } from '../../utils/imageUrl';
 
 export default function DigitalCardPage() {
   const { user } = useAuth();
@@ -62,7 +63,7 @@ export default function DigitalCardPage() {
 
           <div className="mt-6 flex flex-col items-center text-center">
             <img
-              src={user?.profile_picture || user?.avatar || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=200&q=80'}
+              src={getImageUrl(user?.profile_picture || user?.avatar, 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=200&q=80')}
               alt={user?.name}
               className="h-20 w-20 rounded-2xl object-cover ring-4 ring-blue-500/30 shadow-md"
             />

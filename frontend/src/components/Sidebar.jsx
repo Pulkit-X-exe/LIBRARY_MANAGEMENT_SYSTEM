@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getImageUrl } from '../utils/imageUrl';
 import {
   LayoutDashboard, BookOpen, Clock, Bookmark, Heart,
   Receipt, FileText, QrCode, ArrowLeftRight, Users,
@@ -66,7 +67,7 @@ export default function Sidebar({ isOpen, onClose }) {
   else if (role === 'librarian') links = librarianLinks;
   else if (role === 'teacher') links = teacherLinks;
 
-  const avatarUrl = user?.profile_picture || user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=128&q=80';
+  const avatarUrl = getImageUrl(user?.profile_picture || user?.avatar, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=128&q=80');
 
   return (
     <>

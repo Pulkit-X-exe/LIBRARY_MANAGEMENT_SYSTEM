@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const { 
   sequelize, BookIssue, Fine, BookIssueReminder, PasswordResetToken, 
   EmailVerificationToken, ReadingGoal, ReadingList, ReadingListItem, 
@@ -38,6 +39,18 @@ app.get('/api/health', (req, res) => {
 
 // Mount API routes
 app.use('/api', apiRoutes);
+
+// Serve frontend static build in production if available
+const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {
