@@ -62,7 +62,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start Server
-app.listen(PORT, async () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`==================================================`);
   console.log(`🏫 Adarsh Senior Secondary School Management System`);
   console.log(`📍 Garhi Bazidpur, Gurugram`);
