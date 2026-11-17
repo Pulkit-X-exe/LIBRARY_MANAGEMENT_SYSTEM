@@ -96,6 +96,9 @@ export default function ForgotPassword() {
         setResendCooldown(30);
         setOtpDigits(['', '', '', '', '', '']);
         setStep(2);
+        if (response.devOtp) {
+          setInfoMessage(`Development Mode (SMTP not configured): Your OTP code is ${response.devOtp}`);
+        }
         setTimeout(() => {
           otpInputRefs.current[0]?.focus();
         }, 100);
@@ -129,10 +132,14 @@ export default function ForgotPassword() {
     setInfoMessage('');
     setLoading(true);
     try {
-      await requestPasswordReset(email.trim());
+      const res = await requestPasswordReset(email.trim());
       setResendCooldown(30);
       setOtpDigits(['', '', '', '', '', '']);
-      setInfoMessage('A new verification code has been dispatched to your email.');
+      if (res?.devOtp) {
+        setInfoMessage(`Development Mode (SMTP not configured): Your OTP code is ${res.devOtp}`);
+      } else {
+        setInfoMessage('A new verification code has been dispatched to your email.');
+      }
       otpInputRefs.current[0]?.focus();
     } catch (err) {
       const is429 = err.response?.status === 429;

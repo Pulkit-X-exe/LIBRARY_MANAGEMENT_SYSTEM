@@ -725,7 +725,7 @@ exports.forgotPassword = async (req, res) => {
     await user.save();
 
     // Send professional HTML email containing the 6-digit OTP (NO reset link)
-    await sendPasswordResetOtpEmail({
+    const emailResult = await sendPasswordResetOtpEmail({
       userName: user.name,
       userEmail: user.email,
       otpCode,
@@ -741,9 +741,20 @@ exports.forgotPassword = async (req, res) => {
       ip: req.ip
     });
 
+    const isSimulated = !process.env.EMAIL_USER || emailResult?.simulated;
+    if (isSimulated) {
+      console.log(`\n======================================================`);
+      console.log(`🔑 [OTP CODE for ${user.email}]: ${otpCode}`);
+      console.log(`======================================================\n`);
+    }
+
     return res.status(200).json({
       success: true,
-      message: 'Verification code sent successfully.'
+      message: isSimulated 
+        ? 'Verification code generated (SMTP simulated in dev/test mode).'
+        : 'Verification code sent successfully.',
+      simulated: isSimulated,
+      devOtp: isSimulated ? otpCode : undefined
     });
   } catch (error) {
     console.error('forgotPassword error:', error);

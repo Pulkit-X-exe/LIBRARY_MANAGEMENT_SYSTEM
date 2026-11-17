@@ -271,7 +271,7 @@ ${SCHOOL_LOCATION}`;
 /**
  * Underlying helper to send email safely with error handling and fallback
  */
-async function sendMail({ to, subject, text, html }) {
+async function sendMail({ to, subject, text, html, otpCode }) {
   if (!to) {
     return { success: false, message: 'Recipient email address is required.' };
   }
@@ -286,12 +286,16 @@ async function sendMail({ to, subject, text, html }) {
     console.log(`To:      ${to}`);
     console.log(`From:    ${fromAddress}`);
     console.log(`Subject: ${subject}`);
-    console.log(`Notice:  Password reset email generated for user.`);
+    if (otpCode) {
+      console.log(`🔑 Verification Code (OTP): ${otpCode}`);
+    }
+    console.log(`Notice:  Add EMAIL_USER & EMAIL_PASSWORD to backend/.env to send real emails via Gmail.`);
     console.log(`======================================================\n`);
 
     return {
       success: true,
       simulated: true,
+      otpCode,
       messageId: `sim-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       recipient: to,
       message: 'SMTP credentials are not configured in backend/.env. Simulated dispatch.'
@@ -451,7 +455,8 @@ Adarsh Senior Secondary School`;
     to: userEmail,
     subject,
     text: textBody,
-    html: htmlBody
+    html: htmlBody,
+    otpCode
   });
 }
 
@@ -575,7 +580,8 @@ Garhi Bazidpur, Gurugram, Haryana`;
     to: userEmail,
     subject,
     text: textBody,
-    html: htmlBody
+    html: htmlBody,
+    otpCode
   });
 }
 
